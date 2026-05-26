@@ -14,13 +14,13 @@ DerivedData/
 .build/
 Package.resolved
 
-# Node / JS toolchain (esbuild bundle pipeline)
+# Node / JS toolchain (esbuild bundle pipeline — js/ 폴더)
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Generated JS bundle (built from js/ by build.mjs)
+# Generated JS bundle (js/build.mjs → Xcode Resources)
 ios/ReactNativeLightDemo/Resources/bundle.js
 
 # Internal design docs — keep local only
