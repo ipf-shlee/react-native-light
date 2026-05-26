@@ -1,1 +1,3 @@
-// JS entry — empty at bootstrap. UI components start in the next commit.
+import { h, render, View } from '../../../js/react-light.js';
+
+render(<View flex={1} backgroundColor="#ff3333" />);
