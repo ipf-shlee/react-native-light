@@ -4,6 +4,7 @@ export const ROOT_ID = 0;
 
 export const View = 'View';
 export const Text = 'Text';
+export const ScrollView = 'ScrollView';
 export const Pressable = 'Pressable';
 
 export function h(type, props, ...children) {
