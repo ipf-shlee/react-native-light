@@ -104,10 +104,35 @@ final class ViewRegistry {
         parent.addSubview(child)
     }
 
+    // 부모의 모든 자식 일괄 제거. tear-down/rebuild 재렌더 모델에서 사용.
+    // 진짜 RN엔 직접 대응이 없음 — reconciler가 diff 결과로 개별 removeChild emit.
+    func removeAllChildren(parentId: Int) {
+        guard let parent = views[parentId] else { return }
+        for child in parent.subviews {
+            cleanupRegistry(for: child)
+            child.removeFromSuperview()
+        }
+    }
+
     // 단일 prop 갱신.
     func setProp(id: Int, key: String, value: Any) {
         guard let view = views[id] else { return }
         applyProp(to: view, key: key, value: value)
+    }
+
+    // 뷰가 트리에서 떨어질 때 dict 청소 (재귀).
+    // RN 대응:
+    //   Fabric: prepareForRecycle + Registry.enqueue (재활용 풀)
+    //   우리는 풀링 없이 폐기.
+    private func cleanupRegistry(for view: UIView) {
+        for subview in view.subviews {
+            cleanupRegistry(for: subview)
+        }
+        let id = view.tag
+        if let registered = views[id], registered === view {
+            views.removeValue(forKey: id)
+            layoutProps.removeValue(forKey: id)
+        }
     }
 
     private func applyProps(to view: UIView, props: [String: Any]) {

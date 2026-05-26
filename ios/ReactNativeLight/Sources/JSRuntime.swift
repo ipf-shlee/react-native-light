@@ -53,6 +53,11 @@ final class JSRuntime {
         }
         context.setObject(setText, forKeyedSubscript: "setText" as NSString)
 
+        let removeAllChildren: @convention(block) (Int) -> Void = { parentId in
+            registry.removeAllChildren(parentId: parentId)
+        }
+        context.setObject(removeAllChildren, forKeyedSubscript: "removeAllChildren" as NSString)
+
         // 트리 setup이 끝난 후 호출돼 모든 frame 계산.
         // RN 대응: Fabric의 MountingManager가 mount transaction 끝에 layout 적용.
         let layout: @convention(block) (Int) -> Void = { rootId in
