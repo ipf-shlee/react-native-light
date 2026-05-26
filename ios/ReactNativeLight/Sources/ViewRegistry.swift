@@ -71,11 +71,28 @@ final class ViewRegistry {
         case "View":
             // RN Legacy: RCTView / Fabric: RCTViewComponentView
             view = UIView()
+        case "Text":
+            // RN Legacy: RCTTextView (Core Text 직접 사용)
+            // https://github.com/facebook/react-native/blob/main/packages/react-native/Libraries/Text/Text/RCTTextView.mm
+            // Fabric: RCTParagraphComponentView
+            // https://github.com/facebook/react-native/blob/main/packages/react-native/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
+            let label = UILabel()
+            label.numberOfLines = 0
+            view = label
         default: view = UIView()
         }
         view.tag = id
         views[id] = view
         applyProps(to: view, props: props)
+    }
+
+    // Text 콘텐츠 설정.
+    // RN 대응:
+    //   Legacy: RCTTextViewManager + RCTShadowText
+    //   Fabric: RCTParagraphComponentView.updateState:oldState:
+    func setText(id: Int, text: String) {
+        guard let label = views[id] as? UILabel else { return }
+        label.text = text
     }
 
     // 트리에 자식 추가.
@@ -112,6 +129,23 @@ final class ViewRegistry {
         case "backgroundColor":
             if let hex = value as? String {
                 view.backgroundColor = UIColor(hex: hex)
+            }
+        case "fontSize":
+            if let label = view as? UILabel, let n = value as? NSNumber {
+                label.font = .systemFont(ofSize: CGFloat(n.doubleValue))
+            }
+        case "color":
+            if let label = view as? UILabel, let hex = value as? String {
+                label.textColor = UIColor(hex: hex)
+            }
+        case "textAlign":
+            if let label = view as? UILabel, let align = value as? String {
+                switch align {
+                case "center": label.textAlignment = .center
+                case "right": label.textAlignment = .right
+                case "left": label.textAlignment = .left
+                default: break
+                }
             }
         default: break
         }
