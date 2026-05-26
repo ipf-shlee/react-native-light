@@ -4,22 +4,11 @@ export const ROOT_ID = 0;
 
 export const View = 'View';
 export const Text = 'Text';
+export const Pressable = 'Pressable';
 
 export function h(type, props, ...children) {
   return { type, props: props || {}, children: children.flat(Infinity) };
 }
-
-// ---------------------------------------------------------------------------
-// 학습용 데모 runtime — reconciler 아님.
-//
-// 진짜 RN은 React reconciler가 diff/patch. 우리는 그 레이어를 안 만들고
-// 호스트 브릿지 위에서 가장 단순한 모델 사용: state 변경 시 root 서브트리를
-// 통째로 폐기하고 처음부터 다시 emit.
-//
-// 한계:
-//   - 스크롤 위치/제스처 상태 손실, 깜빡임
-//   - 루트 컴포넌트만 useState 가능 (전역 hook slot 하나)
-// ---------------------------------------------------------------------------
 
 let rootComponent = null;
 let rootParentId = ROOT_ID;
@@ -32,8 +21,6 @@ export function useState(initial) {
   if (!(i in hookSlots)) hookSlots[i] = initial;
   const setter = (next) => {
     const newValue = typeof next === 'function' ? next(hookSlots[i]) : next;
-    // 값이 같으면 재렌더 스킵 — React/RN의 표준 동작.
-    // 우리 모델에선 매 재렌더가 전체 폐기/재생성이라 특히 중요.
     if (newValue === hookSlots[i]) return;
     hookSlots[i] = newValue;
     if (!isRendering) rerenderRoot();
@@ -53,7 +40,6 @@ function rerenderRoot() {
   }
 }
 
-// 공개 진입점. 함수형 컴포넌트면 rootComponent로 추적 → 재렌더 가능.
 export function render(vnode, parentId = ROOT_ID) {
   if (vnode && typeof vnode === 'object' && typeof vnode.type === 'function') {
     rootComponent = vnode.type;
@@ -75,9 +61,10 @@ function renderTree(vnode, parentId) {
     return renderTree(vnode.type(vnode.props), parentId);
   }
 
-  const props = splitProps(vnode.props);
+  const { props, handlers } = splitProps(vnode.props);
   const id = nextId++;
   createView(vnode.type, id, props);
+  wireHandlers(id, handlers);
   appendChild(parentId, id);
 
   if (vnode.type === 'Text') {
@@ -93,11 +80,24 @@ function renderTree(vnode, parentId) {
   return id;
 }
 
+// 함수 prop이면서 on으로 시작하면 event handler, 그 외엔 일반 prop.
+// key/ref는 React 내부용 prop이라 native로 안 보냄.
 function splitProps(all) {
   const props = {};
+  const handlers = {};
   for (const k in all) {
     if (k === 'key' || k === 'ref') continue;
-    props[k] = all[k];
+    const v = all[k];
+    if (typeof v === 'function' && k.startsWith('on') && k.length > 2) handlers[k] = v;
+    else props[k] = v;
   }
-  return props;
+  return { props, handlers };
+}
+
+function wireHandlers(id, handlers) {
+  for (const k in handlers) {
+    // 'onPress' → 'press'
+    const event = k.charAt(2).toLowerCase() + k.slice(3);
+    registerCallback(id, event, handlers[k]);
+  }
 }
