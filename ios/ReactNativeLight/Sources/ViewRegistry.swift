@@ -1,4 +1,5 @@
 import UIKit
+import JavaScriptCore
 
 // ----------------------------------------------------------------------------
 // ViewRegistry
@@ -48,6 +49,16 @@ final class ViewRegistry {
     // RN 대응: Yoga node (https://github.com/facebook/react-native/blob/main/packages/react-native/ReactCommon/yoga/yoga/YGNode.h)
     var layoutProps: [Int: LayoutProps] = [:]
 
+    // 이벤트 콜백. JSValue가 strong reference라 dict 보관만으로 GC 안전.
+    // (JSManagedValue는 cycle breaking용 — 우리 콜백은 cycle 없으니 불필요)
+    // RN 대응:
+    //   Legacy: RCTEventDispatcher — 중앙 라우터
+    //   https://github.com/facebook/react-native/blob/main/packages/react-native/React/Base/RCTEventDispatcher.m
+    //   Fabric: 각 ComponentView가 C++ EventEmitter 보유
+    //   https://github.com/facebook/react-native/blob/main/packages/react-native/React/Fabric/Mounting/RCTComponentViewProtocol.h
+    private var callbacks: [Int: [String: JSValue]] = [:]
+    private var tapHandlers: [Int: TapHandler] = [:]
+
     func registerRoot(_ view: UIView) {
         views[Self.rootId] = view
     }
@@ -79,6 +90,18 @@ final class ViewRegistry {
             let label = UILabel()
             label.numberOfLines = 0
             view = label
+        case "Pressable":
+            // RN: Pressable은 순수 JS 컴포넌트 (Libraries/Components/Pressable/Pressable.js)
+            // 내부적으로 View + responder + PressabilityCore 조합.
+            // 우리는 단순화해서 UIView + UITapGestureRecognizer 직결.
+            // https://github.com/facebook/react-native/blob/main/packages/react-native/Libraries/Components/Pressable/Pressable.js
+            let v = UIView()
+            let handler = TapHandler(registry: self, viewId: id)
+            tapHandlers[id] = handler
+            let tap = UITapGestureRecognizer(target: handler, action: #selector(TapHandler.handle))
+            v.addGestureRecognizer(tap)
+            v.isUserInteractionEnabled = true
+            view = v
         default: view = UIView()
         }
         view.tag = id
@@ -120,6 +143,24 @@ final class ViewRegistry {
         applyProp(to: view, key: key, value: value)
     }
 
+    // 이벤트 콜백 등록. JSValue 그대로 보관 → Swift ARC가 wrapper 유지 → JS GC 안전.
+    // RN 대응:
+    //   Legacy: RCTEventDispatcher
+    //   Fabric: updateEventEmitter:로 C++ EventEmitter 주입
+    func registerCallback(id: Int, eventName: String, callback: JSValue) {
+        if callbacks[id] == nil { callbacks[id] = [:] }
+        callbacks[id]?[eventName] = callback
+    }
+
+    // 네이티브 이벤트 → JS 콜백 호출.
+    // RN 대응:
+    //   Legacy: RCTEventDispatcher.sendEvent: (async bridge)
+    //   Fabric: ViewEventEmitter::onPress() 등 C++ 메서드 → JSI 동기 실행
+    fileprivate func dispatchEvent(viewId: Int, eventName: String) {
+        guard let fn = callbacks[viewId]?[eventName] else { return }
+        fn.call(withArguments: [])
+    }
+
     // 뷰가 트리에서 떨어질 때 dict 청소 (재귀).
     // RN 대응:
     //   Fabric: prepareForRecycle + Registry.enqueue (재활용 풀)
@@ -132,6 +173,8 @@ final class ViewRegistry {
         if let registered = views[id], registered === view {
             views.removeValue(forKey: id)
             layoutProps.removeValue(forKey: id)
+            callbacks.removeValue(forKey: id)
+            tapHandlers.removeValue(forKey: id)
         }
     }
 
@@ -202,3 +245,24 @@ private extension UIColor {
         self.init(red: r, green: g, blue: b, alpha: a)
     }
 }
+
+// Pressable의 탭을 받아 dispatchEvent로 라우팅.
+// RN 대응:
+//   Legacy: RCTTouchHandler — UIWindow 레벨 터치 가로채기 + responder chain
+//   https://github.com/facebook/react-native/blob/main/packages/react-native/React/Base/RCTTouchHandler.m
+//   Fabric: RCTSurfaceTouchHandler + 각 ComponentView 자체 처리
+//   https://github.com/facebook/react-native/blob/main/packages/react-native/React/Fabric/RCTSurfaceTouchHandler.mm
+private final class TapHandler: NSObject {
+    weak var registry: ViewRegistry?
+    let viewId: Int
+
+    init(registry: ViewRegistry, viewId: Int) {
+        self.registry = registry
+        self.viewId = viewId
+    }
+
+    @objc func handle() {
+        registry?.dispatchEvent(viewId: viewId, eventName: "press")
+    }
+}
+

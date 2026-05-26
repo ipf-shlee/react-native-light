@@ -58,6 +58,11 @@ final class JSRuntime {
         }
         context.setObject(removeAllChildren, forKeyedSubscript: "removeAllChildren" as NSString)
 
+        let registerCallback: @convention(block) (Int, String, JSValue) -> Void = { id, eventName, callback in
+            registry.registerCallback(id: id, eventName: eventName, callback: callback)
+        }
+        context.setObject(registerCallback, forKeyedSubscript: "registerCallback" as NSString)
+
         // 트리 setup이 끝난 후 호출돼 모든 frame 계산.
         // RN 대응: Fabric의 MountingManager가 mount transaction 끝에 layout 적용.
         let layout: @convention(block) (Int) -> Void = { rootId in
