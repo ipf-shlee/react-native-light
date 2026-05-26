@@ -90,6 +90,12 @@ final class ViewRegistry {
             let label = UILabel()
             label.numberOfLines = 0
             view = label
+        case "ScrollView":
+            // RN Legacy: RCTScrollView / Fabric: RCTScrollViewComponentView
+            // https://github.com/facebook/react-native/blob/main/packages/react-native/React/Views/ScrollView/RCTScrollView.m
+            // https://github.com/facebook/react-native/blob/main/packages/react-native/React/Fabric/Mounting/ComponentViews/ScrollView/RCTScrollViewComponentView.mm
+            // contentSize 자동 계산은 LayoutEngine이 처리 (ScrollView 메인 축은 unbounded).
+            view = UIScrollView()
         case "Pressable":
             // RN: Pressable은 순수 JS 컴포넌트 (Libraries/Components/Pressable/Pressable.js)
             // 내부적으로 View + responder + PressabilityCore 조합.
